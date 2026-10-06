@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Persistent AI Coding Workspace</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161923; --panel-2: #1d2130; --border: #2a2f42;
+    --text: #e4e6ee; --muted: #8a8fa3; --accent: #5b8cff; --accent-2: #3ddc97;
+    --danger: #ff5b6e; --warn: #ffb84d;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; }
+  #app { display:flex; flex-direction:column; height:100vh; }
+  header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--border); }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  header .tabs { display:flex; gap:4px; }
+  header .tabs button { background:none; border:none; color:var(--muted); padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; }
+  header .tabs button.active { background:var(--panel-2); color:var(--text); }
+  main { flex:1; display:flex; overflow:hidden; }
+  #sidebar { width:260px; background:var(--panel); border-right:1px solid var(--border); overflow-y:auto; padding:10px; flex-shrink:0; }
+  #sidebar h2 { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:14px 4px 6px; }
+  #sidebar h2:first-child { margin-top:4px; }
+  .tree-node { padding:3px 6px; border-radius:4px; cursor:pointer; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tree-node:hover { background:var(--panel-2); }
+  .tree-file { color:var(--text); }
+  .tree-dir { color:var(--muted); font-weight:600; }
+  #content { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+  #chat-view, #file-view, #memory-view, #tasks-view, #providers-view, #activity-view { flex:1; display:none; flex-direction:column; overflow:hidden; }
+  #chat-view.active, #file-view.active, #memory-view.active, #tasks-view.active, #providers-view.active, #activity-view.active { display:flex; }
+  #messages { flex:1; overflow-y:auto; padding:16px; }
+  .msg { max-width:75%; margin-bottom:12px; padding:10px 14px; border-radius:10px; font-size:14px; line-height:1.5; white-space:pre-wrap; }
+  .msg.user { background:var(--accent); color:#fff; margin-left:auto; }
+  .msg.assistant { background:var(--panel-2); border:1px solid var(--border); }
+  .msg .actions { margin-top:8px; font-size:12px; color:var(--muted); }
+  .msg .actions div { margin-top:2px; }
+  #chat-input-bar { display:flex; gap:8px; padding:12px; border-top:1px solid var(--border); background:var(--panel); }
+  #chat-input-bar textarea { flex:1; resize:none; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:10px; font-size:14px; height:44px; font-family:inherit; }
+  #chat-input-bar button { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:0 18px; cursor:pointer; font-size:14px; }
+  #status-bar { padding:6px 16px; background:var(--panel); border-top:1px solid var(--border); font-size:12px; color:var(--muted); display:flex; gap:16px; align-items:center; }
+  .dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px; }
+  .dot.ok { background:var(--accent-2); } .dot.bad { background:var(--danger); }
+  #file-view pre { flex:1; margin:0; padding:16px; overflow:auto; font-size:13px; font-family: "SF Mono", Consolas, monospace; background:var(--panel-2); }
+  .panel-body { flex:1; overflow-y:auto; padding:16px; }
+  .card { background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; }
+  .card .meta { font-size:11px; color:var(--muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:.03em; }
+  .row { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  input, select, textarea.field { background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:8px; font-size:13px; }
+  button.btn { background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:8px 14px; cursor:pointer; font-size:13px; }
+  button.btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.btn.danger { background:var(--danger); border-color:var(--danger); color:#fff; }
+  .empty { color:var(--muted); font-size:13px; padding:20px; text-align:center; }
+  .confirm-box { border:1px solid var(--warn); background:#2a2410; border-radius:8px; padding:10px; margin-top:8px; font-size:13px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🗂 Persistent AI Coding Workspace</h1>
+    <div class="tabs">
+      <button data-view="chat-view" class="active">Chat</button>
+      <button data-view="file-view">Files</button>
+      <button data-view="memory-view">Memory</button>
+      <button data-view="tasks-view">Tasks</button>
+      <button data-view="providers-view">Providers</button>
+      <button data-view="activity-view">Activity</button>
+    </div>
+    <div class="row" style="margin:0;">
+      <input id="project-path-input" placeholder="/path/to/project" style="width:220px;" />
+      <button class="btn primary" id="connect-btn">Connect</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="sidebar">
+      <h2>Project</h2>
+      <div id="project-info" class="empty">No project connected</div>
+      <h2>Files</h2>
+      <div id="file-tree"></div>
+    </div>
+
+    <div id="content">
+      <div id="chat-view" class="active">
+        <div id="messages"><div class="empty">Connect a project, then start chatting with the agent.</div></div>
+        <div id="chat-input-bar">
+          <textarea id="chat-input" placeholder="Ask the agent to explain, fix, or build something..."></textarea>
+          <button class="btn primary" id="send-btn">Send</button>
+        </div>
+      </div>
+
+      <div id="file-view">
+        <div class="row" style="padding:12px 16px 0;"><strong id="file-view-path">No file selected</strong></div>
+        <pre id="file-view-content"></pre>
+      </div>
+
+      <div id="memory-view">
+        <div class="panel-body" id="memory-list"><div class="empty">No memory yet</div></div>
+      </div>
+
+      <div id="tasks-view">
+        <div class="panel-body">
+          <div class="row">
+            <input id="task-title" placeholder="Task title" style="flex:1;" />
+            <button class="btn primary" id="add-task-btn">Add Task</button>
+          </div>
+          <div id="tasks-list"><div class="empty">No tasks yet</div></div>
+        </div>
+      </div>
+
+      <div id="providers-view">
+        <div class="panel-body">
+          <div class="card">
+            <div class="meta">Add Provider</div>
+            <div class="row">
+              <input id="prov-name" placeholder="provider_name (e.g. openai_compatible)" />
+              <input id="prov-model" placeholder="model (e.g. gpt-4o-mini)" />
+              <input id="prov-url" placeholder="api base url (optional)" />
+              <input id="prov-key" placeholder="API key" type="password" />
+              <input id="prov-priority" placeholder="priority (lower=first)" style="width:80px;" />
+              <button class="btn primary" id="add-provider-btn">Add</button>
+            </div>
+          </div>
+          <div id="providers-list"><div class="empty">No providers configured</div></div>
+        </div>
+      </div>
+
+      <div id="activity-view">
+        <div class="panel-body" id="activity-list"><div class="empty">No activity yet</div></div>
+      </div>
+    </div>
+  </main>
+
+  <div id="status-bar">
+    <span id="status-project">No project</span>
+    <span id="status-provider"><span class="dot bad"></span>No provider</span>
+  </div>
+</div>
+
+<script>
+const state = { projectId: null, sessionId: crypto.randomUUID(), workspacePath: null };
+
+function $(id) { return document.getElementById(id); }
+
+document.querySelectorAll('header .tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('header .tabs button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#content > div').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    $(btn.dataset.view).classList.add('active');
+    if (btn.dataset.view === 'memory-view') loadMemory();
+    if (btn.dataset.view === 'tasks-view') loadTasks();
+    if (btn.dataset.view === 'providers-view') loadProviders();
+    if (btn.dataset.view === 'activity-view') loadActivity();
+  });
+});
+
+async function api(path, opts = {}) {
+  opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+$('connect-btn').addEventListener('click', async () => {
+  const local_path = $('project-path-input').value.trim();
+  if (!local_path) return;
+  try {
+    const data = await api('/api/projects/connect', { method: 'POST', body: JSON.stringify({ local_path }) });
+    state.projectId = data.project.id;
+    state.workspacePath = data.project.local_path;
+    $('project-info').innerHTML = `<div><strong>${data.project.name}</strong></div>
+      <div style="color:var(--muted);font-size:12px;">${data.files_count} files · ${data.languages.join(', ') || 'no languages detected'}</div>
+      <div style="color:var(--muted);font-size:12px;">Git: ${data.git ? 'Detected' : 'None'}</div>`;
+    $('status-project').textContent = data.project.name;
+    $('messages').innerHTML = '';
+    loadTree();
+  } catch (e) { alert('Could not connect project: ' + e.message); }
+});
+
+async function loadTree() {
+  const data = await api(`/api/projects/${state.projectId}/files`);
+  $('file-tree').innerHTML = '';
+  renderTree(data.tree, $('file-tree'), '');
+}
+
+function renderTree(node, container, prefix) {
+  (node.children || []).forEach(child => {
+    const rel = prefix ? prefix + '/' + child.name : child.name;
+    const div = document.createElement('div');
+    if (child.type === 'directory') {
+      div.className = 'tree-node tree-dir';
+      div.textContent = '📁 ' + child.name;
+      container.appendChild(div);
+      const sub = document.createElement('div');
+      sub.style.paddingLeft = '12px';
+      container.appendChild(sub);
+      renderTree(child, sub, rel);
+    } else {
+      div.className = 'tree-node tree-file';
+      div.textContent = '📄 ' + child.name;
+      div.addEventListener('click', () => openFile(rel));
+      container.appendChild(div);
+    }
+  });
+}
+
+async function openFile(relPath) {
+  document.querySelector('[data-view="file-view"]').click();
+  const data = await api(`/api/projects/${state.projectId}/file?path=${encodeURIComponent(relPath)}`);
+  $('file-view-path').textContent = relPath;
+  $('file-view-content').textContent = data.binary ? '(binary file)' : (data.content || '');
+}
+
+function appendMessage(role, text, actions) {
+  const emptyEl = $('messages').querySelector('.empty');
+  if (emptyEl) emptyEl.remove();
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  if (actions && actions.length) {
+    const a = document.createElement('div');
+    a.className = 'actions';
+    actions.forEach(act => {
+      const line = document.createElement('div');
+      const icon = act.status === 'ok' ? '✓' : act.status === 'blocked' ? '⛔' : '⚠';
+      line.textContent = `${icon} ${act.type} ${act.path || act.command || ''} — ${act.status}`;
+      a.appendChild(line);
+    });
+    div.appendChild(a);
+  }
+  $('messages').appendChild(div);
+  $('messages').scrollTop = $('messages').scrollHeight;
+  return div;
+}
+
+async function sendMessage() {
+  const text = $('chat-input').value.trim();
+  if (!text || !state.projectId) return;
+  $('chat-input').value = '';
+  appendMessage('user', text);
+  const thinking = appendMessage('assistant', 'Thinking...');
+  try {
+    const data = await api(`/api/projects/${state.projectId}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ message: text, session_id: state.sessionId, mode: 'AUTO' }),
+    });
+    thinking.remove();
+    appendMessage('assistant', data.message || '(no response)', data.actions);
+    if (data.pending_confirmation && data.pending_confirmation.length) {
+      const box = document.createElement('div');
+      box.className = 'confirm-box';
+      data.pending_confirmation.forEach(act => {
+        const p = document.createElement('div');
+        p.textContent = `Needs confirmation: ${act.type} ${act.path || act.command || ''}`;
+        const approveBtn = document.createElement('button');
+        approveBtn.className = 'btn danger';
+        approveBtn.textContent = 'Approve';
+        approveBtn.style.marginLeft = '8px';
+        approveBtn.addEventListener('click', async () => {
+          const r = await api(`/api/projects/${state.projectId}/chat/approve`, {
+            method: 'POST', body: JSON.stringify({ action: act }),
+          });
+          appendMessage('assistant', `Executed: ${act.type} — ${r.status}`);
+        });
+        p.appendChild(approveBtn);
+        box.appendChild(p);
+      });
+      $('messages').appendChild(box);
+    }
+    loadTree();
+  } catch (e) {
+    thinking.remove();
+    appendMessage('assistant', 'Error: ' + e.message);
+  }
+}
+$('send-btn').addEventListener('click', sendMessage);
+$('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+async function loadMemory() {
+  if (!state.projectId) return;
+  const data = await api(`/api/projects/${state.projectId}/memory`);
+  const list = $('memory-list');
+  list.innerHTML = '';
+  if (!data.memory.length) { list.innerHTML = '<div class="empty">No memory yet</div>'; return; }
+  data.memory.forEach(m => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="meta">${m.category} · importance ${m.importance}</div><div>${m.content}</div>`;
+    list.appendChild(card);
+  });
+}
+
+async function loadTasks() {
+  if (!state.projectId) return;
+  const data = await api(`/api/projects/${state.projectId}/tasks`);
+  const list = $('tasks-list');
+  list.innerHTML = '';
+  if (!data.tasks.length) { list.innerHTML = '<div class="empty">No tasks yet</div>'; return; }
+  data.tasks.forEach(t => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="meta">${t.status} · priority ${t.priority}</div><div>${t.title}</div>`;
+    list.appendChild(card);
+  });
+}
+$('add-task-btn').addEventListener('click', async () => {
+  const title = $('task-title').value.trim();
+  if (!title || !state.projectId) return;
+  await api(`/api/projects/${state.projectId}/tasks`, { method: 'POST', body: JSON.stringify({ title }) });
+  $('task-title').value = '';
+  loadTasks();
+});
+
+async function loadProviders() {
+  const data = await api('/api/providers');
+  const list = $('providers-list');
+  list.innerHTML = '';
+  if (!data.providers.length) { list.innerHTML = '<div class="empty">No providers configured</div>'; }
+  data.providers.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="meta">${p.provider_name} · ${p.model_name} · priority ${p.priority}</div>
+      <div>Key: ${p.masked_key} — <span style="color:${p.status === 'ACTIVE' ? 'var(--accent-2)' : 'var(--danger)'}">${p.status}</span></div>`;
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn danger'; delBtn.textContent = 'Remove'; delBtn.style.marginTop = '6px';
+    delBtn.addEventListener('click', async () => { await api(`/api/providers/${p.id}`, { method: 'DELETE' }); loadProviders(); });
+    const testBtn = document.createElement('button');
+    testBtn.className = 'btn'; testBtn.textContent = 'Test'; testBtn.style.marginTop = '6px'; testBtn.style.marginLeft = '6px';
+    testBtn.addEventListener('click', async () => { const r = await api(`/api/providers/${p.id}/test`, { method: 'POST' }); alert('Status: ' + r.status); loadProviders(); });
+    card.appendChild(testBtn);
+    card.appendChild(delBtn);
+    list.appendChild(card);
+  });
+  updateStatusBar(data.providers);
+}
+$('add-provider-btn').addEventListener('click', async () => {
+  const body = {
+    provider_name: $('prov-name').value.trim() || 'openai_compatible',
+    model_name: $('prov-model').value.trim(),
+    api_base_url: $('prov-url').value.trim() || undefined,
+    api_key: $('prov-key').value.trim(),
+    priority: parseInt($('prov-priority').value) || 100,
+  };
+  if (!body.model_name || !body.api_key) return alert('Model name and API key are required.');
+  await api('/api/providers', { method: 'POST', body: JSON.stringify(body) });
+  ['prov-name','prov-model','prov-url','prov-key','prov-priority'].forEach(id => $(id).value = '');
+  loadProviders();
+});
+
+function updateStatusBar(providers) {
+  const active = providers.find(p => p.status === 'ACTIVE' && p.enabled);
+  const el = $('status-provider');
+  if (active) el.innerHTML = `<span class="dot ok"></span>${active.provider_name} · ${active.model_name}`;
+  else el.innerHTML = `<span class="dot bad"></span>No active provider`;
+}
+
+async function loadActivity() {
+  if (!state.projectId) return;
+  const data = await api(`/api/projects/${state.projectId}/activity`);
+  const list = $('activity-list');
+  list.innerHTML = '';
+  if (!data.activity.length) { list.innerHTML = '<div class="empty">No activity yet</div>'; return; }
+  data.activity.forEach(a => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="meta">${a.created_at}</div><div>${a.action}: ${a.detail || ''}</div>`;
+    list.appendChild(card);
+  });
+}
+
+loadProviders();
+</script>
+</body>
+</html>
